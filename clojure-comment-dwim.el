@@ -83,7 +83,7 @@
 (defun clojure-comment-dwim-trailling-comment ()
   (progn (delete-region (point) (+ 2 (point)))
          (end-of-line)
-         (insert " ;")))
+         (insert " ; ")))
 
 (defun clojure-comment-dwim-leading-comment (comment:)
   (if (and (not clojure-comment-dwim-ignore-trailing-comment)
