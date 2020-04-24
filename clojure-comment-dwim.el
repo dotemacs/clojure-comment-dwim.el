@@ -97,6 +97,7 @@
              (let ((beg (comment-search-forward (line-end-position) t)))
                (when beg (goto-char (- (point) 2))))
              (kill-line)
+             (delete-horizontal-space)
              (end-of-line))
     (progn (back-to-indentation)
            (clojure-comment-dwim-next-comment-or-uncomment))))
