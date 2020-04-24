@@ -65,7 +65,6 @@
 (defun clojure-comment-dwim-insert-comment (arg)
   "Determine what type of comment: should be inserted based on the `arg'."
   (let ((arg-position (1+ (seq-position clojure-comment-dwim-order arg))))
-    (message "called 2")
     (if (= arg-position (length clojure-comment-dwim-order))
         (progn
           (delete-region (point) (+ 2 (point))))
