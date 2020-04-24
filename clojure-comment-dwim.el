@@ -8,12 +8,35 @@
 ;; code, by cycling through different comment: types: `#_' & `;;',
 ;; which are inserted at the beginning of the given line.
 ;;
-;; There is an optional customisation via
-;; `clojure-comment-dwim-ignore-trailing-comment', when set the
-;; comments will be cycled and the very last comment: will add a
-;; trailing comment (mimicking the behaviour of comment-dwim-2):
+;; For example, with the below sample code (with '█' being the
+;; cursor):
 ;;
-;;     (fn [x] (inc x)) ; <- this trailing comment
+;;  █(ns foo.bar
+;;     (:require [foo.baz]))
+;;
+;; after invoking `clojure-comment-dwim' it would transform to:
+;;
+;;  #_(ns foo.bar
+;;      (:require [foo.baz]))
+;;
+;; invoking `clojure-comment-dwim' again, it would then insert `;;':
+;;
+;;  ;;(ns foo.bar
+;;      (:require [foo.baz]))
+;;
+;; As you can see it "unbalances" parens, but that is intentional, as
+;; it's up to you to decide which comment style you want to add.
+;;
+;; With the setting `clojure-comment-dwim-ignore-trailing-comment' set
+;; to `nil' the invocation of `clojure-comment-dwim' would then change
+;; the comment to trailing `;':
+;;
+;;  (ns foo.bar ;
+;;    (:require [foo.baz]))
+;;
+;; If you select a region and invoke `clojure-comment-dwim', in that
+;; case, the commenting would fall back to the default
+;; `comment-region' which would coment the region, as expected.
 ;;
 ;; You can further customise the mode by changing the order in which
 ;; the comments are cycled. By default it's the setting of
