@@ -38,7 +38,7 @@
 ;;    #_(:require [foo.baz]))
 ;;
 ;; The mode also operates on regions, wrapping the region in
-;; `(comment)'.
+;; `#_' or `(comment)', depending what's appropriate.
 ;;
 ;; For example, with this code:
 ;;
@@ -49,7 +49,19 @@
 ;; `clojure-comment-dwim' invoked, it would produce:
 ;;
 ;;  (ns foo.bar
-;;    (comment (:require [foo.baz])))
+;;    #_(:require [foo.baz]))
+;;
+;; But if you were to select the middle line here:
+;;
+;; {:a 1
+;;  :b 2
+;;  :c 3}
+;;
+;; it will wrap it with a (comment), like so:
+;;
+;; {:a 1
+;;  (comment :b 2)
+;;  :c 3}
 ;;
 ;; To configure the mode, replace the default `comment-dwim' binding,
 ;; by adding this to your configuration, in order to have
@@ -82,7 +94,7 @@ Credit to rightfold from https://stackoverflow.com/a/5194568"
     (cond ((elt ppss 3)
            (goto-char (elt ppss 8))
            (clojure-comment-dwim-backward-up-sexp (1- arg)))
-          ((backward-up-list 1)))))
+          ((backward-up-list arg)))))
 
 
 (defun clojure-comment-dwim-find-comment-and-delete ()
@@ -97,21 +109,29 @@ Credit to rightfold from https://stackoverflow.com/a/5194568"
 
 (defun clojure-comment-dwim-insert-comment ()
   "Insert #_ comment, padding it with whitespace if needed."
-  (insert (if (looking-back " ")
+  (insert (if (or (looking-back " ")
+                  (bolp))
               "#_"
             " #_")))
 
 
 (defun clojure-comment-dwim-wrap-with-comment (beg end)
-  "Insert `(comment ...)' around `beg' & `end'."
-  (let* ((comment-string "(comment")
-         (comment-size (length comment-string))
-         (new-end (1+ (+ end comment-size))))
-    (progn
-      (goto-char beg)
-      (insert comment-string " ")
-      (goto-char new-end)
-      (insert ")"))))
+  "Wrap a region with the appropriate comment.
+
+If it's a s-expression, use #_, otherwise (comment ...)"
+  (if (progn (goto-char beg)
+             (forward-sexp)
+             (= end (point)))
+      (progn (goto-char beg)
+             (clojure-comment-dwim-insert-comment))
+    (let* ((comment-string "(comment")
+           (comment-size (length comment-string))
+           (new-end (1+ (+ end comment-size))))
+      (progn
+        (goto-char beg)
+        (insert comment-string " ")
+        (goto-char new-end)
+        (insert ")")))))
 
 
 (defun clojure-comment-dwim-delete-comment (arg)
@@ -123,7 +143,11 @@ Credit to rightfold from https://stackoverflow.com/a/5194568"
            (delete-char -1)
            (setq new-end (- (point) comment-size))
            (goto-char return-to)
-           (delete-char comment-size)
+           (let ((count 0))
+             (while (and (re-search-forward "(comment" nil t)
+                         (< count 1))
+               (progn (replace-match "")
+                      (setq count (1+ count)))))
            (indent-region (point) new-end))))
 
 
@@ -155,14 +179,14 @@ Credit to rightfold from https://stackoverflow.com/a/5194568"
                  (progn (replace-match "")
                         (setq count (1+ count))))))
             (t (if (> (first (syntax-ppss)) 0)
-                   (if (looking-at "(comment")
+                   (if (looking-at "\\s-?+(comment")
                        (clojure-comment-dwim-delete-comment beg)
                      (save-excursion
                        (let* ((found nil)
                               (comment-point nil))
                          (while (and (not found)
                                      (> (first (syntax-ppss)) 0))
-                           (clojure-comment-dwim-backward-up-sexp (point))
+                           (backward-up-list 1)
                            (when (looking-at "(comment")
                              (setq found t)
                              (setq comment-point (point))))
