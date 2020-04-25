@@ -1,12 +1,12 @@
-;;; clojure-comment-dwim.el --- Comment Clojure(Script) by cycling through comment order.
+;;; clojure-comment-dwim.el --- Easier Clojure(Script) code commenting.
 
 ;;; Commentary:
 ;;
 ;; Description
 ;;
 ;; This package provides an easy way to (un)comment: Clojure(Script)
-;; code, by cycling through different comment: types: `#_' & `;;',
-;; which are inserted at the beginning of the given line.
+;; code. If `clojure-comment-dwim' is invoked it will insert the #_
+;; comment to comment out the s-expression at the point.
 ;;
 ;; For example, with the below sample code (with '█' being the
 ;; cursor):
@@ -19,32 +19,42 @@
 ;;  #_(ns foo.bar
 ;;      (:require [foo.baz]))
 ;;
-;; invoking `clojure-comment-dwim' again, it would then insert `;;':
+;; The next invocation of `clojure-comment-dwim' would uncomment the
+;; above code.
 ;;
-;;  ;;(ns foo.bar
-;;      (:require [foo.baz]))
+;; If a prefix argument is passed in, via `C-u n' (where `n' is a
+;; digit), it would traverse up `n' s-expressions before inserting the
+;; comment.
 ;;
-;; As you can see it "unbalances" parens, but that is intentional, as
-;; it's up to you to decide which comment style you want to add.
+;; For example, with this code (where `.' is under the cursor `█'):
 ;;
-;; With the setting `clojure-comment-dwim-ignore-trailing-comment' set
-;; to `nil' the invocation of `clojure-comment-dwim' would then change
-;; the comment to trailing `;':
+;;  (ns foo.bar
+;;    (:require [foo█baz]))
 ;;
-;;  (ns foo.bar ;
+;; and invocation of C-u 2 M-x clojure-comment-dwim, it would produce
+;; the following:
+;;
+;;  (ns foo.bar
+;;    #_(:require [foo.baz]))
+;;
+;; The mode also operates on regions, wrapping the region in
+;; `(comment)'.
+;;
+;; For example, with this code:
+;;
+;;  (ns foo.bar
 ;;    (:require [foo.baz]))
 ;;
-;; If you select a region and invoke `clojure-comment-dwim', in that
-;; case, the commenting would fall back to the default
-;; `comment-region' which would coment the region, as expected.
+;; if the whole of :require clause was selected and
+;; `clojure-comment-dwim' invoked, it would produce:
 ;;
-;; You can further customise the mode by changing the order in which
-;; the comments are cycled. By default it's the setting of
-;; `clojure-comment-dwim-order', but you can reverse the order to suit
-;; your taste.
+;;  (ns foo.bar
+;;    (comment (:require [foo.baz])))
 ;;
 ;; To configure the mode, replace the default `comment-dwim' binding,
-;; by adding this to your configuration:
+;; by adding this to your configuration, in order to have
+;; `clojure-comment-dwim' active only in clojure-mode &
+;; clojurescript-mode:
 ;;
 ;; (add-hook 'clojure-mode-hook
 ;;           '(lambda ()
@@ -56,69 +66,118 @@
 
 ;;; Code:
 
-(setq clojure-comment-dwim-order ["#_" ";;"])
-;;(setq clojure-comment-dwim-order [";;" "#_"])
+(defun clojure-comment-dwim-commentp (arg)
+  "Check if the current point `arg' is within comment."
+  (string= "font-lock-comment-face"
+           (or (get-char-property arg 'read-face-name)
+               (get-char-property arg 'face)
+               (plist-get (text-properties-at arg) 'face))))
 
-(setq clojure-comment-dwim-ignore-trailing-comment t)
-;;(setq clojure-comment-dwim-ignore-trailing-comment nil)
 
-(defun clojure-comment-dwim-insert-comment (arg)
-  "Determine what type of comment: should be inserted based on the `arg'."
-  (let ((arg-position (1+ (seq-position clojure-comment-dwim-order arg))))
-    (if (= arg-position (length clojure-comment-dwim-order))
-        (progn
-          (delete-region (point) (+ 2 (point))))
-      (progn (delete-region (point) (+ 2 (point)))
-             (insert (aref clojure-comment-dwim-order arg-position))))))
+(defun clojure-comment-dwim-backward-up-sexp (arg)
+  "Go up a s-expression by parens, to just outsite the opening paren.
+Credit to rightfold from https://stackoverflow.com/a/5194568"
+  (interactive "p")
+  (let ((ppss (syntax-ppss)))
+    (cond ((elt ppss 3)
+           (goto-char (elt ppss 8))
+           (clojure-comment-dwim-backward-up-sexp (1- arg)))
+          ((backward-up-list 1)))))
 
-(defun clojure-comment-dwim-next-comment-or-uncomment (&optional arg)
-  (if arg
-      (clojure-comment-dwim-insert-comment arg)
-    (insert (aref clojure-comment-dwim-order 0))))
 
-(defun clojure-comment-dwim-comment-at-eol ()
-  (progn (end-of-line)
-         (nth 4 (syntax-ppss))))
+(defun clojure-comment-dwim-find-comment-and-delete ()
+  (while (not (looking-at "#_\\s-?+"))
+    (backward-char))
+  (delete-char 2)
+  (cond ((and (looking-at " ")
+              (looking-back " "))
+         (delete-char -2))
+        ((looking-back "\\((\\|\\[\\) ") (delete-char -1))))
 
-(defun clojure-comment-dwim-trailling-comment ()
-  (progn (delete-region (point) (+ 2 (point)))
-         (end-of-line)
-         (insert " ; ")))
 
-(defun clojure-comment-dwim-leading-comment (comment:)
-  (if (and (not clojure-comment-dwim-ignore-trailing-comment)
-           (string= comment: (aref clojure-comment-dwim-order 1)))
-      (clojure-comment-dwim-trailling-comment)
-    (clojure-comment-dwim-next-comment-or-uncomment comment:)))
+(defun clojure-comment-dwim-insert-comment ()
+  "Insert #_ comment, padding it with whitespace if needed."
+  (insert (if (looking-back " ")
+              "#_"
+            " #_")))
 
-(defun clojure-comment-dwim-trailing-comment-or-no-comment ()
-  (if (clojure-comment-dwim-comment-at-eol)
-      (progn (goto-char (line-beginning-position))
-             (let ((beg (comment-search-forward (line-end-position) t)))
-               (when beg (goto-char (- (point) 2))))
-             (kill-line)
-             (delete-horizontal-space)
-             (end-of-line))
-    (progn (back-to-indentation)
-           (clojure-comment-dwim-next-comment-or-uncomment))))
+
+(defun clojure-comment-dwim-wrap-with-comment (beg end)
+  "Insert `(comment ...)' around `beg' & `end'."
+  (let* ((comment-string "(comment")
+         (comment-size (length comment-string))
+         (new-end (1+ (+ end comment-size))))
+    (progn
+      (goto-char beg)
+      (insert comment-string " ")
+      (goto-char new-end)
+      (insert ")"))))
+
+
+(defun clojure-comment-dwim-delete-comment (arg)
+  "Deletion of (comment) type comment."
+  (progn (let* ((return-to arg)
+                (comment-size (length "(comment"))
+                (new-end nil))
+           (forward-sexp)
+           (delete-char -1)
+           (setq new-end (- (point) comment-size))
+           (goto-char return-to)
+           (delete-char comment-size)
+           (indent-region (point) new-end))))
+
 
 ;;;###autoload
-(defun clojure-comment-dwim ()
-  "Cycle comments for Clojure(Script): `#_', `;;' & `;' (but only
-at the end of line). The order they are inserted is defined in
-`clojure-comment-dwim-order' (where only the order of `;;' & `#_'
-can be defined, the third comment: type, a single `;' at the end
-of line is only turned on if
-`clojure-comment-dwim-ignore-trailing-comment' is set to false)."
-  (interactive)
-  (if (use-region-p)
-      (comment-region)
-    (progn (back-to-indentation)
-           (cond ((looking-at "#_")
-                  (clojure-comment-dwim-leading-comment "#_"))
-                 ((looking-at ";;")
-                  (clojure-comment-dwim-leading-comment ";;"))
-                 (t (clojure-comment-dwim-trailing-comment-or-no-comment))))))
+(defun clojure-comment-dwim (beg &optional end)
+  (interactive (if (use-region-p)
+                   (list (region-beginning) (region-end))
+                 (list (point))))
+  (if end
+      (clojure-comment-dwim-wrap-with-comment beg end)
+    (if current-prefix-arg
+        (progn (clojure-comment-dwim-backward-up-sexp current-prefix-arg)
+               (if (not (clojure-comment-dwim-commentp (point)))
+                   (clojure-comment-dwim-insert-comment)
+                 (clojure-comment-dwim-find-comment-and-delete)))
+      (cond ((clojure-comment-dwim-commentp beg)
+             (progn (while (clojure-comment-dwim-commentp (point))
+                      (backward-char))
+                    (clojure-comment-dwim-find-comment-and-delete)))
+            ((or (looking-back "#_\\s-?+")
+                 (and (looking-back "#")
+                      (looking-at "_")))
+             (progn (backward-char)
+                    (clojure-comment-dwim (point))))
+            ((looking-at "#_")
+             (let ((count 0))
+               (while (and (re-search-forward "#_\\s-?+" nil t)
+                           (< count 1))
+                 (progn (replace-match "")
+                        (setq count (1+ count))))))
+            (t (if (> (first (syntax-ppss)) 0)
+                   (if (looking-at "(comment")
+                       (clojure-comment-dwim-delete-comment beg)
+                     (save-excursion
+                       (let* ((found nil)
+                              (comment-point nil))
+                         (while (and (not found)
+                                     (> (first (syntax-ppss)) 0))
+                           (clojure-comment-dwim-backward-up-sexp (point))
+                           (when (looking-at "(comment")
+                             (setq found t)
+                             (setq comment-point (point))))
+                         (if found
+                             (progn (goto-char comment-point)
+                                    (clojure-comment-dwim-delete-comment (point)))
+                           (progn (goto-char beg)
+                                  (if (not (looking-at "\\s-?+#_"))
+                                      (clojure-comment-dwim-insert-comment)
+                                    (let ((count 0))
+                                      (while (and (re-search-forward "#_\\s-?+" nil t)
+                                                  (< count 1))
+                                        (progn (replace-match "")
+                                               (setq count (1+ count)))))))))))
+                 (clojure-comment-dwim-insert-comment)))))))
 
 (provide 'clojure-comment-dwim)
 ;;; clojure-comment-dwim.el ends here
