@@ -86,15 +86,17 @@
                (plist-get (text-properties-at arg) 'face))))
 
 
-(defun clojure-comment-dwim-backward-up-sexp (arg)
-  "Go up a s-expression by parens, to just outsite the opening paren.
-Credit to rightfold from https://stackoverflow.com/a/5194568"
+(defun clojure-comment-dwim-move-by-sexp (arg)
+  "Move by number of ARG s-expressions.
+If going forward, the point is on the opening paren, if going
+backward, the point is on the closing paren.  Credit to rightfold
+from https://stackoverflow.com/a/5194568"
   (interactive "p")
   (let ((ppss (syntax-ppss)))
     (cond ((elt ppss 3)
            (goto-char (elt ppss 8))
-           (clojure-comment-dwim-backward-up-sexp (1- arg)))
-          ((backward-up-list arg)))))
+           (clojure-comment-dwim-move-by-sexp (1- arg)))
+          ((backward-up-list (* arg -1))))))
 
 
 (defun clojure-comment-dwim-find-comment-and-delete ()
@@ -159,7 +161,7 @@ If it's a s-expression, use #_, otherwise (comment ...)"
   (if end
       (clojure-comment-dwim-wrap-with-comment beg end)
     (if current-prefix-arg
-        (progn (clojure-comment-dwim-backward-up-sexp current-prefix-arg)
+        (progn (clojure-comment-dwim-move-by-sexp current-prefix-arg)
                (if (not (clojure-comment-dwim-commentp (point)))
                    (clojure-comment-dwim-insert-comment)
                  (clojure-comment-dwim-find-comment-and-delete)))
