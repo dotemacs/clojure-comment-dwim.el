@@ -31,7 +31,7 @@
 ;;  (ns foo.bar
 ;;    (:require [foo█baz]))
 ;;
-;; and invocation of C-u 2 M-x clojure-comment-dwim, it would produce
+;; and invocation of C-u -2 M-x clojure-comment-dwim, it would produce
 ;; the following:
 ;;
 ;;  (ns foo.bar
