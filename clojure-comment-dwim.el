@@ -144,7 +144,7 @@ If it's a s-expression, use #_, otherwise (comment ...)"
            (setq new-end (- (point) comment-size))
            (goto-char return-to)
            (let ((count 0))
-             (while (and (re-search-forward "(comment" nil t)
+             (while (and (re-search-forward "(comment " nil t)
                          (< count 1))
                (progn (replace-match "")
                       (setq count (1+ count)))))
