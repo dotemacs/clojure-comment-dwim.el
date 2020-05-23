@@ -37,8 +37,9 @@
 ;;  (ns foo.bar
 ;;    #_(:require [foo.baz]))
 ;;
-;; The mode also operates on regions, wrapping the region in
-;; `#_' or `(comment)', depending what's appropriate.
+;; The mode also operates on regions, prefixing the region with `#_',
+;; if it's a single s-expression, or prefixing each part of the region
+;; if there are multiple s-expressions.
 ;;
 ;; For example, with this code:
 ;;
@@ -57,10 +58,10 @@
 ;;  :b 2
 ;;  :c 3}
 ;;
-;; it will wrap it with a (comment), like so:
+;; it would wrap all with `#_' like:
 ;;
 ;; {:a 1
-;;  (comment :b 2)
+;;  #_:b #_ 2
 ;;  :c 3}
 ;;
 ;; To configure the mode, replace the default `comment-dwim' binding,
@@ -96,7 +97,7 @@ from https://stackoverflow.com/a/5194568"
     (cond ((elt ppss 3)
            (goto-char (elt ppss 8))
            (clojure-comment-dwim-move-by-sexp (1- arg)))
-          ((backward-up-list (* arg -1))))))
+          ((up-list arg)))))
 
 
 (defun clojure-comment-dwim-find-comment-and-delete ()
@@ -105,7 +106,7 @@ from https://stackoverflow.com/a/5194568"
   (delete-char 2)
   (cond ((and (looking-at " ")
               (looking-back " "))
-         (delete-char -2))
+         (delete-char -1))
         ((looking-back "\\((\\|\\[\\) ") (delete-char -1))))
 
 
@@ -120,20 +121,76 @@ from https://stackoverflow.com/a/5194568"
 (defun clojure-comment-dwim-wrap-with-comment (beg end)
   "Wrap a region with the appropriate comment.
 
-If it's a s-expression, use #_, otherwise (comment ...)"
-  (if (progn (goto-char beg)
-             (forward-sexp)
-             (= end (point)))
-      (progn (goto-char beg)
-             (clojure-comment-dwim-insert-comment))
-    (let* ((comment-string "(comment")
-           (comment-size (length comment-string))
-           (new-end (1+ (+ end comment-size))))
-      (progn
-        (goto-char beg)
-        (insert comment-string " ")
-        (goto-char new-end)
-        (insert ")")))))
+   If it's a s-expression, use #_, otherwise add #_ before each
+   s-expression."
+  (progn
+    (goto-char beg)
+    (let ((new-end end))
+      (while (not (> (point) (1- new-end)))
+        (insert " #_")
+        (setq new-end (+ new-end 2))
+        (forward-sexp)))))
+
+(defun clojure-comment-dwim-on-region (beg end)
+  (progn
+    (goto-char beg)
+    (if (looking-at "\\s-?+#_\\s-?+")
+        (progn
+          (back-to-indentation)
+          (let ((new-end end))
+            (while (not (>= (point) (1- new-end)))
+              (when (or (looking-at "\\n?\\s-?+#_\\s-?+")
+                        (looking-back "\\n?\\s-?+#_\\s-?+"))
+                (clojure-comment-dwim (point)))
+              (forward-sexp)
+              (setq new-end (- new-end 2)))))
+      (let ((new-end end))
+        (while (not (>= (point) (1- new-end)))
+          (if (and (not (looking-at "\\s-?+#_\\s-?+"))
+                   (not (looking-back "\\s-?+#_\\s-?+"))
+                   (not (eolp))
+                   (not (looking-at ")")))
+              (progn
+                (setq new-end (+ new-end 1))
+                (insert "#_"))
+            (when (and (not (clojure-comment-dwim-commentp (point)))
+                       (not (eolp))
+                       (not (looking-at "#_"))
+                       (not (looking-at ")"))
+                       (not (looking-back "#_")))
+              (insert (if (not (looking-at " "))
+                          (progn (setq new-end (+ new-end 2))
+                                 "#_")
+                        (progn (setq new-end (+ new-end 3))
+                               " #_")))))
+          (if (not (= (point) new-end))
+              (if (and (eolp)
+                       (save-excursion
+                         (backward-char)
+                         (not (clojure-comment-dwim-commentp (point)))))
+                  (progn (forward-sexp)
+                         (backward-sexp)
+                         (setq new-end (+ new-end 2))
+                         (when (not (looking-at "\\s-?+#_"))
+                           (insert "#_")))
+                (progn
+                  (forward-sexp)
+                  (when (and (not (eolp))
+                             (not (looking-at ")"))
+                             (not (looking-at "\\s-?+#_"))
+                             ;; not within a comment
+                             (not (looking-back "\\s-?+#_")))
+                    (insert " #_"))))
+            (progn (backward-sexp)
+                   (setq new-end (+ new-end 2))
+                   (insert "#_"))))
+        (when (and (= (point) new-end)
+                   (not (clojure-comment-dwim-commentp (point)))
+                   (bolp))
+          (progn (backward-sexp)
+                 (setq new-end (+ new-end 2))
+                 (insert "#_")
+                 (forward-sexp)))))))
 
 
 (defun clojure-comment-dwim-delete-comment (arg)
