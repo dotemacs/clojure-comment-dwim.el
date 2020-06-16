@@ -95,6 +95,23 @@ code, where you can describe where the POINT should be at."
     #_(inc 2)))")
 
 
+(test-case 'commenting-a-region
+           "Commenting a region, but without commenting a trailing ]"
+           "
+(defn foo
+  []
+  (let [a (inc 1)]
+    (inc a)))"
+           ((jump-to 25 "on 'a' within let")
+            (push-mark)
+            (jump-to 35 "after ']' of let")
+            (clojure-comment-dwim (region-beginning) (region-end)))
+           "
+(defn foo
+  []
+  (let [#_a #_ (inc 1)]
+    (inc a)))")
+
 (test-case 'uncommenting-comment-of-type-comment
            "Uncommenting `comment' type comment."
            "
