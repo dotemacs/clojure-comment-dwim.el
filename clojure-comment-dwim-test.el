@@ -7,7 +7,8 @@
    DOC-STRING, description of the test.
    INPUT is a string.
    TEST-STEPS is a list of steps needed to preform.
-   OUTPUT is the string the TEST-STEPS should be compared against."
+   OUTPUT is the outcome of the INPUT after TEST-STEPS
+   have been run."
   `(ert-deftest ,(intern-soft (eval test-name)) ()
      ,doc-string
      (should
