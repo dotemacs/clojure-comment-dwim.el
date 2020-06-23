@@ -178,6 +178,7 @@ from https://stackoverflow.com/a/5194568"
                   (when (and (not (eolp))
                              (not (looking-at ")"))
                              (not (looking-at "]"))
+                             (not (looking-at "}"))
                              (not (looking-at "\\s-?+#_"))
                              ;; not within a comment
                              (not (looking-back "\\s-?+#_")))

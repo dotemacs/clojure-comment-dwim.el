@@ -113,6 +113,18 @@ code, where you can describe where the POINT should be at."
   (let [#_a #_ (inc 1)]
     (inc a)))")
 
+(test-case 'dont-comment-curly-brace
+           "Commenting a region, but without commenting a trailing }"
+           "
+{:deps {foo/bar {:mvn/version \"0.0.1\"}"
+           ((jump-to 19 "on ':' of :mvn")
+            (push-mark)
+            (jump-to 42 "after '}'")
+            (clojure-comment-dwim (region-beginning) (region-end)))
+           "
+{:deps {foo/bar {#_:mvn/version #_ \"0.0.1\"}")
+
+
 (test-case 'uncommenting-comment-of-type-comment
            "Uncommenting `comment' type comment."
            "
